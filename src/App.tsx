@@ -1,5 +1,6 @@
 import { ChangeEvent, FormEvent, useState } from 'react';
 import { signIn, signOut } from './auth/mockAuth';
+import { ReportExport } from './components/ReportExport';
 
 interface Credentials {
   email: string;
@@ -83,6 +84,15 @@ export default function App() {
     setUserName(null);
   };
 
+  const mockProjectData = {
+    id: 'proj-123',
+    name: 'SaaS Validator',
+    description: 'A comprehensive validation tool for SaaS businesses to analyze market fit, competitive landscape, and growth potential.',
+    industry: 'Software & Technology',
+    targetMarket: 'B2B SaaS Founders and Investors',
+    url: 'https://example.com',
+  };
+
   return (
     <main>
       <section className="card" data-testid="home">
@@ -98,6 +108,12 @@ export default function App() {
           <AuthForm onSuccess={setUserName} />
         )}
       </section>
+      
+      {userName && (
+        <section className="card" data-testid="report-section">
+          <ReportExport projectData={mockProjectData} />
+        </section>
+      )}
     </main>
   );
 }
