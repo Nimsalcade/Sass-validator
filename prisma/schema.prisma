@@ -1,0 +1,59 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model AuditLog {
+  id              String   @id @default(cuid())
+  userId          String?
+  projectId       String?
+  url             String
+  method          String
+  userAgent       String
+  status          Int
+  responseTime    Int      // milliseconds
+  cached          Boolean  @default(false)
+  rateLimited     Boolean  @default(false)
+  robotsAllowed   Boolean  @default(true)
+  error           String?
+  metadata        Json?
+  timestamp       DateTime @default(now())
+  
+  @@map("audit_logs")
+  @@index([userId])
+  @@index([projectId])
+  @@index([timestamp])
+  @@index([url])
+}
+
+model RateLimitConfig {
+  id        String   @id @default(cuid())
+  host      String   @unique
+  requests  Int
+  window    Int      // milliseconds
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  @@map("rate_limit_configs")
+}
+
+model CacheEntry {
+  id        String   @id @default(cuid())
+  url       String   @unique
+  content   String
+  status    Int
+  headers   Json
+  ttl       Int      // milliseconds
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+  
+  @@map("cache_entries")
+  @@index([expiresAt])
+}
