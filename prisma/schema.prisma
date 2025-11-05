@@ -1,0 +1,371 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [pgvector(map: "vector")]
+}
+
+enum UserRole {
+  ADMIN
+  MEMBER
+}
+
+enum ProjectRole {
+  OWNER
+  COLLABORATOR
+  VIEWER
+}
+
+enum ProjectStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+enum ResearchRunStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
+enum ExperimentStatus {
+  DRAFT
+  QUEUED
+  RUNNING
+  SUCCEEDED
+  FAILED
+  CANCELLED
+}
+
+enum DemandSignalType {
+  CUSTOMER
+  MARKET
+  COMPETITOR
+  INTERNAL
+}
+
+enum ToolCallStatus {
+  SUCCESS
+  FAILURE
+  PENDING
+}
+
+enum AssetType {
+  DATASET
+  REPORT
+  MODEL
+  DOCUMENT
+  MEDIA
+  TOOL
+}
+
+enum FileKind {
+  RAW
+  PROCESSED
+  PREVIEW
+  REPORT
+}
+
+model User {
+  id             String            @id @default(uuid())
+  name           String?
+  email          String?           @unique
+  emailVerified  DateTime?
+  image          String?
+  role           UserRole          @default(MEMBER)
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  accounts       Account[]
+  sessions       Session[]
+  memberships    ProjectMember[]
+  ownedProjects  Project[]         @relation("ProjectOwner")
+  researchRuns   ResearchRun[]     @relation("ResearchRunInitiator")
+  toolCallAudits ToolCallAudit[]   @relation("ToolCallActor")
+}
+
+model Account {
+  id                 String   @id @default(uuid())
+  userId             String
+  type               String
+  provider           String
+  providerAccountId  String
+  refresh_token      String?  @db.Text
+  access_token       String?  @db.Text
+  expires_at         Int?
+  token_type         String?
+  scope              String?
+  id_token           String?  @db.Text
+  session_state      String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  id           String   @id @default(uuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model Project {
+  id             String           @id @default(uuid())
+  name           String
+  description    String?
+  status         ProjectStatus    @default(ACTIVE)
+  ownerId        String?
+  metadata       Json?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  owner          User?            @relation("ProjectOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  members        ProjectMember[]
+  researchRuns   ResearchRun[]
+  sources        Source[]
+  competitors    Competitor[]
+  demandSignals  DemandSignal[]
+  experiments    Experiment[]
+  assets         Asset[]
+  files          File[]
+  toolCallAudits ToolCallAudit[]
+
+  @@unique([name])
+  @@index([ownerId])
+}
+
+model ProjectMember {
+  id        String      @id @default(uuid())
+  projectId String
+  userId    String
+  role      ProjectRole @default(COLLABORATOR)
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, userId])
+  @@index([userId])
+}
+
+model Source {
+  id          String   @id @default(uuid())
+  projectId   String
+  name        String
+  type        String
+  config      Json?
+  url         String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  project      Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  researchRuns ResearchRun[]
+  demandSignals DemandSignal[]
+
+  @@unique([projectId, name])
+  @@index([projectId])
+}
+
+model ResearchRun {
+  id              String            @id @default(uuid())
+  projectId       String
+  sourceId        String?
+  initiatedById   String?
+  status          ResearchRunStatus @default(PENDING)
+  totalCost       Decimal?          @db.Decimal(10, 2)
+  metadata        Json?
+  startedAt       DateTime?
+  completedAt     DateTime?
+  summary         String?
+  resultEmbedding Float[]?          @db.Vector(3)
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  source      Source?  @relation(fields: [sourceId], references: [id])
+  initiatedBy User?    @relation("ResearchRunInitiator", fields: [initiatedById], references: [id])
+  experiments Experiment[]
+  assets      Asset[]
+  toolCalls   ToolCallAudit[] @relation("ResearchRunToolCalls")
+
+  @@index([projectId])
+  @@index([sourceId])
+  @@index([status])
+}
+
+model Competitor {
+  id          String    @id @default(uuid())
+  projectId   String
+  name        String
+  description String?
+  website     String?
+  strength    Int?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  project       Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  pricing       Pricing[]
+  demandSignals DemandSignal[]
+
+  @@unique([projectId, name])
+  @@index([projectId])
+}
+
+model Pricing {
+  id           String   @id @default(uuid())
+  competitorId String
+  planName     String
+  price        Decimal  @db.Decimal(12, 2)
+  currency     String   @default("USD")
+  billingCycle String?
+  metadata     Json?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  competitor Competitor @relation(fields: [competitorId], references: [id], onDelete: Cascade)
+
+  @@index([competitorId])
+  @@unique([competitorId, planName])
+}
+
+model DemandSignal {
+  id           String           @id @default(uuid())
+  projectId    String
+  sourceId     String?
+  competitorId String?
+  type         DemandSignalType
+  description  String?
+  magnitude    Int?
+  metadata     Json?
+  recordedAt   DateTime         @default(now())
+  embedding    Float[]?         @db.Vector(3)
+
+  project    Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  source     Source?    @relation(fields: [sourceId], references: [id])
+  competitor Competitor? @relation(fields: [competitorId], references: [id])
+
+  @@index([projectId])
+  @@index([sourceId])
+  @@index([competitorId])
+  @@index([type])
+}
+
+model Experiment {
+  id            String           @id @default(uuid())
+  projectId     String
+  researchRunId String?
+  title         String
+  hypothesis    String?
+  status        ExperimentStatus @default(DRAFT)
+  metrics       Json?
+  startedAt     DateTime?
+  completedAt   DateTime?
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+
+  project      Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  researchRun  ResearchRun? @relation(fields: [researchRunId], references: [id])
+  assets       Asset[]
+  toolCalls    ToolCallAudit[] @relation("ExperimentToolCalls")
+
+  @@index([projectId])
+  @@index([researchRunId])
+  @@index([status])
+}
+
+model Asset {
+  id               String    @id @default(uuid())
+  projectId        String
+  researchRunId    String?
+  experimentId     String?
+  name             String
+  type             AssetType
+  description      String?
+  uri              String?
+  metadata         Json?
+  featureEmbedding Float[]?  @db.Vector(3)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  project     Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  researchRun ResearchRun? @relation(fields: [researchRunId], references: [id])
+  experiment  Experiment?  @relation(fields: [experimentId], references: [id])
+  files       File[]
+
+  @@index([projectId])
+  @@index([researchRunId])
+  @@index([experimentId])
+  @@index([type])
+}
+
+model File {
+  id        String   @id @default(uuid())
+  projectId String
+  assetId   String?
+  kind      FileKind @default(RAW)
+  filename  String
+  path      String
+  mimeType  String?
+  size      Int
+  checksum  String?
+  metadata  Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  asset   Asset?  @relation(fields: [assetId], references: [id], onDelete: SetNull)
+
+  @@index([projectId])
+  @@index([assetId])
+  @@unique([projectId, filename])
+}
+
+model ToolCallAudit {
+  id            String         @id @default(uuid())
+  projectId     String
+  researchRunId String?
+  experimentId  String?
+  actorId       String?
+  toolName      String
+  arguments     Json
+  result        Json?
+  status        ToolCallStatus @default(PENDING)
+  errorMessage  String?
+  invokedAt     DateTime       @default(now())
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  project     Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  researchRun ResearchRun?  @relation("ResearchRunToolCalls", fields: [researchRunId], references: [id])
+  experiment  Experiment?   @relation("ExperimentToolCalls", fields: [experimentId], references: [id])
+  actor       User?         @relation("ToolCallActor", fields: [actorId], references: [id])
+
+  @@index([projectId])
+  @@index([researchRunId])
+  @@index([experimentId])
+  @@index([actorId])
+  @@index([status])
+}
