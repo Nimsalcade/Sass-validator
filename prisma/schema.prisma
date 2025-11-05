@@ -46,6 +46,7 @@ model User {
   image         String?
   accounts      Account[]
   sessions      Session[]
+  projects      Project[]
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
@@ -114,6 +115,133 @@ enum Role {
   USER
   ADMIN
   MODERATOR
+}
+
+// Project model for organizing work
+model Project {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  status      String   @default("ACTIVE") // ACTIVE, INACTIVE, ARCHIVED
+  userId      String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  research    Research[]
+  files       File[]
+  experiments Experiment[]
+  assets      Asset[]
+
+  @@index([userId])
+  @@index([status])
+}
+
+// Research content model
+model Research {
+  id          String   @id @default(cuid())
+  title       String
+  content     String   @db.Text
+  summary     String?
+  sources     String[] // Array of source URLs/references
+  tags        String[] // Array of tags for categorization
+  projectId   String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  project     Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@index([tags])
+}
+
+// File management model
+model File {
+  id        String   @id @default(cuid())
+  name      String
+  size      Int
+  type      String   // MIME type
+  path      String   // Storage path/URL
+  projectId String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+}
+
+// Experiment tracking model
+model Experiment {
+  id          String            @id @default(cuid())
+  name        String
+  description String?
+  hypothesis  String?
+  parameters  Json?             // Experiment parameters and configuration
+  status      String            @default("DRAFT") // DRAFT, RUNNING, COMPLETED, FAILED
+  projectId   String
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  project     Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  results     ExperimentResult[]
+  scores      Score[]
+
+  @@index([projectId])
+  @@index([status])
+}
+
+// Experiment results model
+model ExperimentResult {
+  id           String   @id @default(cuid())
+  data         Json     // Result data
+  metrics      Json?    // Performance metrics
+  notes        String?
+  experimentId String
+  createdAt    DateTime @default(now())
+
+  experiment   Experiment @relation(fields: [experimentId], references: [id], onDelete: Cascade)
+
+  @@index([experimentId])
+}
+
+// Scoring model
+model Score {
+  id           String   @id @default(cuid())
+  name         String
+  description  String?
+  value        Float
+  maxValue     Float
+  percentage   Float    // Calculated field: (value / maxValue) * 100
+  category     String?  // For grouping scores
+  weights      Json?    // Weight configuration
+  experimentId String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  experiment   Experiment @relation(fields: [experimentId], references: [id], onDelete: Cascade)
+
+  @@index([experimentId])
+  @@index([category])
+}
+
+// Asset management model
+model Asset {
+  id          String   @id @default(cuid())
+  name        String
+  type        String   // LANDING_PAGE, EMAIL_SEQUENCE, SOCIAL_MEDIA, BLOG_POST, OTHER
+  content     String?  @db.Text
+  metadata    Json?    // Additional metadata, generation info, etc.
+  status      String   @default("DRAFT") // DRAFT, PUBLISHED, ARCHIVED
+  projectId   String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  project     Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@index([type])
+  @@index([status])
 }
 
 // You can add more models as needed for your specific application
