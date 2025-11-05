@@ -1,8 +1,18 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  experimental: {
-    // Enable experimental features if needed
-    // serverComponentsExternalPackages: ['pg'],
+  // Turbopack configuration (empty to use webpack)
+  turbopack: {},
+  
+  // Force webpack instead of Turbopack for compatibility
+  webpack: (config, { isServer }) => {
+    if (isServer) {
+      // Add any server-side webpack configurations here
+      config.externals.push({
+        'pg-native': 'commonjs pg-native',
+      });
+    }
+    
+    return config;
   },
   
   // Environment variables that should be available in the browser
@@ -13,19 +23,12 @@ const nextConfig = {
 
   // Image optimization settings
   images: {
-    domains: ['example.com'], // Add your image domains here
-  },
-
-  // Webpack configuration for pgvector or other native modules
-  webpack: (config, { isServer }) => {
-    if (isServer) {
-      // Add any server-side webpack configurations here
-      config.externals.push({
-        'pg-native': 'commonjs pg-native',
-      });
-    }
-    
-    return config;
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: 'example.com',
+      },
+    ],
   },
 
   // Redirects and rewrites can be added here
@@ -64,4 +67,4 @@ const nextConfig = {
   },
 };
 
-module.exports = nextConfig;
+export default nextConfig;
