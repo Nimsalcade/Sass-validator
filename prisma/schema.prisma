@@ -1,0 +1,124 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Example User model with NextAuth integration
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  image         String?
+  accounts      Account[]
+  sessions      Session[]
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Add your custom fields here
+  // For example:
+  // role          Role      @default(USER)
+  // profile       Profile?
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// Example Document model with pgvector support
+model Document {
+  id        Int      @id @default(autoincrement())
+  content   String   @db.Text
+  embedding Float[]  // Vector stored as array for pgvector
+  metadata  Json?
+  title     String?
+  url       String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([createdAt])
+}
+
+// Example Search Result model
+model SearchResult {
+  id          Int      @id @default(autoincrement())
+  query       String
+  title       String
+  url         String   @unique
+  content     String   @db.Text
+  source      String
+  relevance   Float?
+  createdAt   DateTime @default(now())
+
+  @@index([query])
+  @@index([source])
+}
+
+// Example API Usage model for tracking
+model ApiUsage {
+  id        Int      @id @default(autoincrement())
+  userId    String?
+  service   String   // "openai", "tavily", "browserless", etc.
+  endpoint  String
+  cost      Float?
+  tokens    Int?
+  status    String   // "success", "error"
+  error     String?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([service])
+  @@index([createdAt])
+}
+
+// Example enums
+enum Role {
+  USER
+  ADMIN
+  MODERATOR
+}
+
+// You can add more models as needed for your specific application
+// Examples:
+// - Blog posts with embeddings for search
+// - User preferences and settings
+// - Analytics and tracking data
+// - File uploads and S3 references
